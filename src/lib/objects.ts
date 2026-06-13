@@ -11,11 +11,13 @@ export async function resolveEffectiveAttributes(productId: string): Promise<{
   effective: Record<string, unknown>;
   inherited_from: Record<string, string>;   // attr code → ancestor sku
 }> {
-  const chain: { sku: string; attributes: Record<string, unknown> }[] = [];
+  type Node = { sku: string; attributes: Record<string, unknown>; parent_id: string | null };
+  const chain: Node[] = [];
   let currentId: string | null = productId;
   for (let depth = 0; currentId && depth < 5; depth++) {
-    const [row] = await query<{ sku: string; attributes: Record<string, unknown>; parent_id: string | null }>(
-      `SELECT sku, attributes, parent_id FROM products WHERE id = $1`, [currentId]);
+    const rows = await query(
+      `SELECT sku, attributes, parent_id FROM products WHERE id = $1`, [currentId]) as Node[];
+    const row = rows[0];
     if (!row) break;
     chain.push(row);
     currentId = row.parent_id;

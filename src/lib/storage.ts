@@ -83,9 +83,10 @@ export const storage: Storage =
 /** Content types for serving by extension (renditions are .webp, originals vary) */
 export function contentTypeFor(key: string): string {
   const ext = path.extname(key).toLowerCase();
-  return {
+  const map: Record<string, string> = {
     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
     ".webp": "image/webp", ".gif": "image/gif", ".pdf": "application/pdf",
     ".svg": "image/svg+xml", ".mp4": "video/mp4", ".csv": "text/csv",
-  }[ext] ?? "application/octet-stream";
+  };
+  return map[ext] ?? "application/octet-stream";
 }

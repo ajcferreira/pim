@@ -4,7 +4,7 @@
 # One-time setup:
 #   fly launch --no-deploy --copy-config        # creates the app from this file
 #   fly secrets set \
-#     DATABASE_URL="postgres://postgres:[DB-PASSWORD]@db.qjwrwudbpydgadcglirk.supabase.co:5432/postgres" \
+#     DATABASE_URL="postgres://postgres.qjwrwudbpydgadcglirk:[ENCODED-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:5432/postgres" \
 #     AUTH_SECRET="$(openssl rand -hex 32)" \
 #     SUPABASE_URL="https://qjwrwudbpydgadcglirk.supabase.co" \
 #     SUPABASE_SERVICE_ROLE_KEY="[service_role key from Supabase dashboard → Settings → API]" \
@@ -25,7 +25,7 @@ primary_region = "fra"
 
 [deploy]
   # Migrations run in a one-off release machine before the new version goes live
-  release_command = "npx node-pg-migrate -m migrations -d DATABASE_URL up"
+  release_command = "npx node-pg-migrate -m migrations up"
 
 [env]
   NODE_ENV = "production"

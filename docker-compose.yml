@@ -1,34 +1,33 @@
-services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: pim
-      POSTGRES_PASSWORD: pim
-      POSTGRES_DB: pim
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pim"]
-      interval: 5s
-      retries: 10
+# Cellar PIM — local Docker Compose
+#
+# Database now lives on Supabase (cellar-pim, eu-central-1) — no local
+# Postgres container. Create a `.env` file alongside this one (see
+# .env.example) with at least DATABASE_URL and AUTH_SECRET set.
+#
+#   docker compose up
+#
+# pg-boss needs LISTEN/NOTIFY, so DATABASE_URL must be the DIRECT
+# connection (port 5432, db.<ref>.supabase.co) — not the pooler.
 
+services:
   api:
     build: .
-    depends_on:
-      db:
-        condition: service_healthy
+    env_file: .env
     environment:
-      DATABASE_URL: postgres://pim:pim@db:5432/pim
-      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
-      CORS_ORIGIN: http://localhost:5173
-      ASSET_DIR: /data/assets
       PORT: 3000
+      NODE_ENV: development
+      # Override anything from .env here if needed, e.g.:
+      # STORAGE_DRIVER: local
+      # ASSET_DIR: /data/assets
     volumes:
+      # Only needed when STORAGE_DRIVER=local. Remove this and the
+      # volume below if STORAGE_DRIVER=supabase (fully stateless).
       - assets:/data/assets
     ports:
       - "3000:3000"
-    command: sh -c "npx node-pg-migrate -m migrations -d DATABASE_URL up && node dist/index.js"
+    # Migrations are applied separately (already done on Supabase).
+    # To run them on startup instead, set RUN_MIGRATIONS=true in .env.
+    command: sh -c '[ "$RUN_MIGRATIONS" = "true" ] && npx node-pg-migrate -m migrations up; node dist/index.js'
 
 volumes:
-  pgdata:
   assets:

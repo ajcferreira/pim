@@ -236,3 +236,12 @@ Deploy: see the comment block at the top of `fly.toml` — `fly launch`,
 set five secrets, `fly deploy`. Migrations run automatically in the
 release phase. DATABASE_URL must be the direct connection (port 5432);
 pg-boss needs LISTEN/NOTIFY which the pooler doesn't support.
+
+## Connecting to Supabase (IPv4 / pg-boss note)
+Use the **session pooler** connection string (port 5432), not the direct
+`db.<ref>.supabase.co` host — the latter is IPv6-only and fails inside
+Docker/Fly with `ENETUNREACH`. Session mode is IPv4 and supports
+LISTEN/NOTIFY, which pg-boss requires (transaction mode on 6543 does not).
+Set DB_SSL=true (Supabase enforces TLS). URL-encode special characters in
+the password. Migrations are opt-in via RUN_MIGRATIONS=true (the Supabase
+DB is already migrated).

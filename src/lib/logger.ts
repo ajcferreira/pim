@@ -1,4 +1,4 @@
-import { pino } from "pino";
+import { pino, type Logger } from "pino";
 import { randomUUID } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 
@@ -10,7 +10,7 @@ export const logger = pino({
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
-    interface Request { id: string; log: pino.Logger; }
+    interface Request { id: string; log: Logger; }
   }
 }
 

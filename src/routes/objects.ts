@@ -167,9 +167,9 @@ objects.get("/products/:id/localized", async (req, res) => {
   let cur: string | null = locale;
   for (let i = 0; cur && i < 3; i++) {
     chain.push(cur);
-    const [l] = await query<{ fallback: string | null }>(
-      `SELECT fallback FROM locales WHERE code = $1`, [cur]);
-    cur = l?.fallback ?? null;
+    const rows = await query(
+      `SELECT fallback FROM locales WHERE code = $1`, [cur]) as { fallback: string | null }[];
+    cur = rows[0]?.fallback ?? null;
   }
 
   const i18n = (p.i18n ?? {}) as Record<string, Record<string, string>>;

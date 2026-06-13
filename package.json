@@ -9,8 +9,8 @@
     "start": "node dist/index.js",
     "create-admin": "tsx scripts/create-admin.ts",
     "test": "node --import tsx --test tests/",
-    "migrate": "node-pg-migrate -m migrations -d DATABASE_URL up",
-    "migrate:down": "node-pg-migrate -m migrations -d DATABASE_URL down",
+    "migrate": "node-pg-migrate -m migrations up",
+    "migrate:down": "node-pg-migrate -m migrations down",
     "test:integration": "node --import tsx --test tests/integration/",
     "typecheck": "tsc --noEmit"
   },
@@ -25,7 +25,7 @@
     "csv-stringify": "^6.5.0",
     "helmet": "^7.1.0",
     "cors": "^2.8.5",
-    "pg-boss": "^9.0.3",
+    "pg-boss": "^10.1.5",
     "pino": "^9.3.2",
     "node-pg-migrate": "^7.6.1"
   },
