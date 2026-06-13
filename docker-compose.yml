@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pim
+      POSTGRES_PASSWORD: pim
+      POSTGRES_DB: pim
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pim"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://pim:pim@db:5432/pim
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      CORS_ORIGIN: http://localhost:5173
+      ASSET_DIR: /data/assets
+      PORT: 3000
+    volumes:
+      - assets:/data/assets
+    ports:
+      - "3000:3000"
+    command: sh -c "npx node-pg-migrate -m migrations -d DATABASE_URL up && node dist/index.js"
+
+volumes:
+  pgdata:
+  assets:

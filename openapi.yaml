@@ -1,0 +1,169 @@
+openapi: 3.1.0
+info:
+  title: PIM/DAM API — Beverage Catalog
+  version: 1.0.0
+  description: >
+    Product Information & Digital Asset Management with a dynamic attribute
+    model. Authenticate via POST /auth/login, then send the access token as
+    `Authorization: Bearer <token>` (1h TTL; rotate with POST /auth/refresh).
+servers:
+  - url: http://localhost:3000
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  schemas:
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [draft, in_review, published, archived] }
+        version: { type: integer, description: Optimistic-locking version; echo on PATCH }
+        attributes:
+          type: object
+          additionalProperties: true
+          description: Dynamic values keyed by attribute code, validated per product type
+    AttributeDef:
+      type: object
+      properties:
+        code: { type: string }
+        label: { type: string }
+        data_type: { type: string, enum: [text, long_text, number, boolean, select, multiselect, date] }
+        unit: { type: [string, "null"] }
+        options: { type: [array, "null"], items: { type: string } }
+        is_required: { type: boolean }
+        group_name: { type: string }
+    Error:
+      type: object
+      properties: { error: { type: string } }
+paths:
+  /auth/login:
+    post:
+      security: []
+      summary: Login (rate-limited, 5 fails / 15 min)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties: { email: { type: string }, password: { type: string } }
+      responses:
+        "200":
+          description: Access + refresh tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  refresh_token: { type: string }
+                  expires_in: { type: integer }
+        "401": { description: Invalid credentials }
+        "429": { description: Rate limited (Retry-After header) }
+  /auth/refresh:
+    post:
+      security: []
+      summary: Rotate refresh token, get new access token
+      responses: { "200": { description: New token pair }, "401": { description: Invalid/expired } }
+  /auth/logout:
+    post: { security: [], summary: Revoke one refresh token, responses: { "204": { description: Revoked } } }
+  /auth/logout-all:
+    post: { summary: Revoke all sessions for current user, responses: { "204": { description: Revoked } } }
+  /auth/me:
+    get: { summary: Current user + permissions, responses: { "200": { description: Identity } } }
+  /products:
+    get:
+      summary: List/search products (needs product.view)
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Full-text + fuzzy search }
+        - { name: type, in: query, schema: { type: string }, description: Product type code }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      description: "Also supports attr.<code>=<value> filters via JSONB containment (e.g. attr.beer_style=IPA)."
+      responses:
+        "200":
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Product" } }
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+    post:
+      summary: Create product (needs product.edit); attributes validated against type
+      responses:
+        "201": { description: Created }
+        "422": { description: Attribute validation errors }
+  /products/{id}:
+    get:
+      summary: Full product with variants, assets, attribute_schema
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: Product }, "404": { description: Not found } }
+    patch:
+      summary: Partial update with optimistic locking (version required)
+      responses:
+        "200": { description: Updated (version incremented) }
+        "403": { description: Publishing requires product.publish }
+        "409": { description: Version conflict — reload and retry }
+        "422": { description: Attribute validation errors }
+  /meta/types:
+    get: { summary: Product types + attribute sets (needs model.manage), responses: { "200": { description: Types } } }
+    post: { summary: Create product type, responses: { "201": { description: Created } } }
+  /meta/attributes:
+    get: { summary: Attribute library, responses: { "200": { description: Attributes } } }
+    post: { summary: Define attribute, responses: { "201": { description: Created } } }
+  /assets:
+    get: { summary: Search assets (tag, q), responses: { "200": { description: Assets } } }
+    post:
+      summary: Upload (multipart 'file'); sha256 dedupe; auto thumb/web renditions
+      responses: { "201": { description: Created }, "200": { description: Deduplicated existing } }
+  /assets/file/{key}:
+    get:
+      summary: Serve original or rendition file (immutable cache headers)
+      parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: File bytes }, "404": { description: Not found } }
+  /assets/{id}/link:
+    post: { summary: "Link asset to product with role (hero, packshot, label…)", responses: { "204": { description: Linked } } }
+  /dashboard/completeness:
+    get: { summary: Required-attribute completeness per product + rollups, responses: { "200": { description: Report } } }
+  /dashboard/compliance:
+    get:
+      summary: Catalog-wide compliance issues
+      parameters: [{ name: markets, in: query, schema: { type: string, example: "DE,SE" } }]
+      responses: { "200": { description: Report } }
+  /io/export.csv:
+    get: { summary: CSV export per type (needs import.run), responses: { "200": { description: CSV file } } }
+  /io/import.csv:
+    post: { summary: CSV upsert by SKU; per-row transactional; validation report, responses: { "200": { description: Report } } }
+  /channels/shopify/feed:
+    get: { summary: Published products in Shopify shape (also /amazon/feed, /gs1/feed), responses: { "200": { description: Feed } } }
+  /features/products/{id}/reviews:
+    post: { summary: Comment; decision approve/request_changes needs review.approve, responses: { "201": { description: Created } } }
+  /features/products/{id}/window:
+    post: { summary: Set publish window (needs product.publish); auto-archive sweep hourly, responses: { "200": { description: Updated } } }
+  /features/variants/{id}/gtin:
+    post: { summary: Set GTIN (check-digit validated, globally unique), responses: { "200": { description: Set }, "422": { description: Invalid }, "409": { description: Duplicate } } }
+  /features/products/{id}/enrich:
+    post: { summary: AI copy suggestions via Claude (stored as draft), responses: { "200": { description: Suggestions } } }
+  /features/share:
+    post: { summary: Create distributor portal link (needs settings.manage), responses: { "201": { description: Link } } }
+  /portal/{token}:
+    get: { security: [], summary: Public read-only published products + assets, responses: { "200": { description: Portal data } } }
+  /features/webhooks:
+    post: { summary: Register webhook; HMAC-signed; 3 retries with backoff, responses: { "201": { description: Created with secret } } }
+  /users:
+    get: { summary: List users with roles (needs user.manage), responses: { "200": { description: Users } } }
+    post: { summary: Create user with roles (transactional), responses: { "201": { description: Created } } }
+  /users/{id}:
+    patch: { summary: "Update user; deactivation/password change revokes sessions; self-lockout prevented", responses: { "200": { description: Updated } } }
+  /users/roles:
+    get: { summary: Role catalog with permissions, responses: { "200": { description: Roles } } }
+    post: { summary: Create custom role from any permission set, responses: { "201": { description: Created } } }
